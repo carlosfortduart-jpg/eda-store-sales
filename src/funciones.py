@@ -102,3 +102,180 @@ def calidad_datos(df, numeric_cols=None):
         print(f"{col}: {len(outliers)} outliers detectados")
 
 
+#-----------CONVERTIR A DATETIME--------------------------------------------------------
+def convertir_a_datetime(df, columnas):
+    """
+    Convierte una o varias columnas del DataFrame a formato datetime
+    y devuelve clean_df con los cambios aplicados.
+
+    Parámetros:
+        df: DataFrame original.
+        columnas: lista con los nombres de las columnas a convertir.
+
+    Devuelve:
+        clean_df: copia del DataFrame con conversiones aplicadas.
+    """
+    import pandas as pd
+
+    # Creamos copia para no modificar el df original
+    clean_df = df.copy()
+
+    for col in columnas:
+        if col not in clean_df.columns:
+            print(f"[Aviso] La columna '{col}' no existe en el DataFrame.")
+            continue
+
+        # Valores nulos antes de convertir
+        antes_nulos = clean_df[col].isna().sum()
+
+        # Conversión
+        clean_df[col] = pd.to_datetime(clean_df[col], errors="coerce")
+
+        # Valores NaT generados por la conversión
+        despues_nulos = clean_df[col].isna().sum()
+        nuevos_nulos = despues_nulos - antes_nulos
+
+        print(f"Columna '{col}' convertida a datetime. Nuevos NaT generados: {nuevos_nulos}")
+
+    return clean_df
+
+
+
+#-----------IMPUTACION ITEM--------------------------------------------------------
+
+def imputar_items_por_categoria(df, suffix_map, verbose=True):
+    """
+    Imputa valores faltantes en la columna 'Item' usando un patrón:
+        Item_{random(1-30)}_{suffix_categoria}
+
+    Parámetros:
+        df: DataFrame original.
+        suffix_map: diccionario {categoria: sufijo}
+        verbose: si True, imprime diagnóstico.
+
+    Devuelve:
+        clean_df: copia del DataFrame con 'Item' imputado.
+    """
+    import random
+    clean_df = df.copy()
+
+    # Índices donde Item es NaN en el original
+    missing_items_idx = clean_df[clean_df["Item"].isna()].index
+
+    for idx in missing_items_idx:
+        category = clean_df.at[idx, "Category"]
+        suffix = suffix_map.get(category, "UNK")  # sufijo por defecto si categoría desconocida
+        random_number = random.randint(1, 30)
+
+        clean_df.at[idx, "Item"] = f"Item_{random_number}_{suffix}"
+
+    if verbose:
+        null_count = clean_df["Item"].isna().sum()
+        print(f"Número de valores nulos en Item después de imputación: {null_count}")
+
+        if len(missing_items_idx) > 0:
+            print("\nEjemplos de filas imputadas:")
+            display(clean_df.loc[missing_items_idx, ["Category", "Item"]].head(10))
+
+    return clean_df
+
+#-----------IMPUTACION CUANTITATIVaS--------------------------------------------------------
+
+def imputar_precios_cantidades_totales(df, verbose=True):
+
+    clean_df = df.copy()
+
+    # IMPUTACIÓN PRICE PER UNIT
+
+    # 1) Fórmula: Total Spent / Quantity
+    clean_df['Price Per Unit'] = (
+        clean_df['Price Per Unit']
+        .fillna(
+            (clean_df['Total Spent'] / clean_df['Quantity'])
+            .where(clean_df['Quantity'] != 0)
+        )
+    )
+
+    # 2) Media agrupada por Item
+    clean_df['Price Per Unit'] = (
+        clean_df['Price Per Unit']
+        .fillna(clean_df.groupby('Item')['Price Per Unit'].transform('mean'))
+    )
+
+    # 3) Valor fijo
+    clean_df['Price Per Unit'] = clean_df['Price Per Unit'].fillna(50.0)
+
+    # IMPUTACIÓN QUANTITY
+
+    clean_df['Quantity'] = (
+        clean_df['Quantity']
+        .fillna(
+            (clean_df['Total Spent'] / clean_df['Price Per Unit'])
+            .where(clean_df['Price Per Unit'] != 0)
+        )
+    )
+
+    clean_df['Quantity'] = (
+        clean_df['Quantity']
+        .fillna(clean_df.groupby('Item')['Quantity'].transform('mean'))
+    )
+
+    clean_df['Quantity'] = clean_df['Quantity'].fillna(5.0)
+
+    # IMPUTACIÓN TOTAL SPENT
+
+    clean_df['Total Spent'] = (
+        clean_df['Total Spent']
+        .fillna(clean_df['Price Per Unit'] * clean_df['Quantity'])
+    )
+
+    # RESUMEN FINAL
+
+    if verbose:
+        print("Valores nulos restantes por columna:")
+        print(clean_df.isna().sum())
+
+    return clean_df
+
+
+#-----------IMPUTACION DISCOUNT--------------------------------------------------------
+
+def limpiar_discount_y_columna_calculada(df, verbose=True):
+
+    clean_df = df.copy()
+
+    # IMPUTAR DISCOUNT APPLIED
+    if "Discount Applied" in clean_df.columns:
+        clean_df["Discount Applied"] = clean_df["Discount Applied"].fillna("False")
+
+    # ELIMINAR COLUMNA CALCULATED TOTAL
+    if "Calculated Total" in clean_df.columns:
+        clean_df = clean_df.drop(columns=["Calculated Total"])
+
+    # MÓDULO DE REPORTE
+    if verbose:
+        print("Valores nulos restantes en cada columna:")
+        print(clean_df.isna().sum())
+
+    return clean_df
+
+#-----------ESTANDARIZAR NOMBRES COLUMNAS--------------------------------------------------------
+
+def estandarizar_nombres_columnas(df, verbose=True):
+
+    clean_df = df.copy()
+
+    clean_df.columns = (
+        clean_df.columns
+            .str.lower()
+            .str.replace(" ", "_", regex=False)
+            .str.replace("-", "_", regex=False)
+    )
+
+    if verbose:
+        print("Nombres de columnas estandarizados:")
+        print(clean_df.columns.tolist())
+
+    return clean_df
+
+
