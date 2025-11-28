@@ -278,4 +278,27 @@ def estandarizar_nombres_columnas(df, verbose=True):
 
     return clean_df
 
+#-----------MATRIZ CORRELACION--------------------------------------------------------
+
+def compute_and_plot_correlation(clean_df):
+    """
+    Calcula la matriz de correlación para columnas numéricas de un DataFrame
+    y genera un heatmap para visualizarla.
+    """
+    # Seleccionar columnas numéricas
+    numeric_cols = clean_df.select_dtypes(include=['int64', 'float64'])
+
+    # Calcular matriz de correlaciones
+    corr_matrix = numeric_cols.corr()
+
+    # Mostrar matriz por consola
+    print(corr_matrix)
+
+    # Plot de la matriz de correlación
+    plt.figure(figsize=(10, 6))
+    sns.heatmap(corr_matrix, annot=True, fmt=".2f", cmap="coolwarm")
+    plt.title("Correlation Matrix - Quantitative Variables")
+    plt.show()
+
+    return corr_matrix
 
